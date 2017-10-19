@@ -408,44 +408,80 @@ static void cmd_save(char *arg)
 	view_save(flag_to_view(flag), arg, to_stdout, flag == 'L', extended);
 }
 
+static void option_changed(void)
+{
+	help_win->changed = 1;
+	if (cur_view == TREE_VIEW) {
+		lib_track_win->changed = 1;
+		lib_tree_win->changed = 1;
+	} else if (cur_view == PLAYLIST_VIEW) {
+		pl_mark_for_redraw();
+	} else {
+		current_win()->changed = 1;
+	}
+	update_titleline();
+	update_statusline();
+}
+
 static void cmd_set(char *arg)
 {
 	char *value = NULL;
 	int i;
+	char suffix = 0;
+	char buf[OPTION_MAX_SIZE];
+	struct cmus_opt *opt;
 
 	for (i = 0; arg[i]; i++) {
 		if (arg[i] == '=') {
 			arg[i] = 0;
 			value = &arg[i + 1];
 			break;
+		} else if (arg[i] == '?' || arg[i] == '!') {
+			suffix = arg[i];
+			arg[i] = 0;
+			break;
 		}
 	}
-	if (value) {
-		option_set(arg, value);
-		help_win->changed = 1;
-		if (cur_view == TREE_VIEW) {
-			lib_track_win->changed = 1;
-			lib_tree_win->changed = 1;
-		} else if (cur_view == PLAYLIST_VIEW) {
-			pl_mark_for_redraw();
+
+	opt = option_find_silent(arg);
+	if (opt != NULL) {
+		if (value) {
+			opt->set(opt->data, value);
+			option_changed();
+		} else if (suffix) {
+			/* support "set <option>?" and "set <option>!" */
+			if (suffix == '?') {
+				opt->get(opt->data, buf, OPTION_MAX_SIZE);
+				info_msg("setting: '%s=%s'", arg, buf);
+			} else { /* <option>! */
+				opt->toggle(opt->data);
+				option_changed();
+			}
 		} else {
-			current_win()->changed = 1;
+			if (opt->flags & OPT_BOOL) {
+				opt->set(opt->data, "true");
+				option_changed();
+			} else {
+				opt->get(opt->data, buf, OPTION_MAX_SIZE);
+				info_msg("setting: '%s=%s'", arg, buf);
+			}
 		}
-		update_titleline();
-		update_statusline();
 	} else {
-		struct cmus_opt *opt;
-		char buf[OPTION_MAX_SIZE];
-
-		/* support "set <option>?" */
-		i--;
-		if (arg[i] == '?')
-			arg[i] = 0;
-
-		opt = option_find(arg);
-		if (opt) {
-			opt->get(opt->data, buf, OPTION_MAX_SIZE);
-			info_msg("setting: '%s=%s'", arg, buf);
+		/* support no<option> */
+		if (!strncmp(arg, "no", 2)) {
+			opt = option_find_silent(arg+2);
+			if (opt != NULL) {
+				if (opt->flags & OPT_BOOL) {
+					opt->set(opt->data, "false");
+					option_changed();
+				} else {
+					error_msg("%s is not a boolean option", arg+2);
+				}
+			} else {
+				error_msg("no such option %s", arg+2);
+			}
+		} else {
+			error_msg("no such option %s", arg);
 		}
 	}
 }
@@ -462,17 +498,7 @@ static void cmd_toggle(char *arg)
 		return;
 	}
 	opt->toggle(opt->data);
-	help_win->changed = 1;
-	if (cur_view == TREE_VIEW) {
-		lib_track_win->changed = 1;
-		lib_tree_win->changed = 1;
-	} else if (cur_view == PLAYLIST_VIEW) {
-		pl_mark_for_redraw();
-	} else {
-		current_win()->changed = 1;
-	}
-	update_titleline();
-	update_statusline();
+	option_changed();
 }
 
 static int get_number(char *str, char **end)
@@ -1304,6 +1330,11 @@ static void cmd_pl_rename(char *arg)
 		pl_rename_selected_pl(arg);
 	else
 		info_msg(":pl-rename only works in view 3");
+}
+
+static void cmd_version(char *arg)
+{
+	info_msg(VERSION);
 }
 
 static void cmd_view(char *arg)
@@ -2384,28 +2415,46 @@ static void expand_options(const char *str)
 	struct cmus_opt *opt;
 	int len;
 	char **tails, *sep;
+	int pos = 0;
 
 	/* tabexp is resetted */
 	len = strlen(str);
 	sep = strchr(str, '=');
-	if (len > 1 && sep) {
+
+	/* support no<option> */
+	if (!strncmp(str, "no", 2)) {
+		tails = xnew(char *, nr_options);
+
+		list_for_each_entry(opt, &option_head, node) {
+			if (strncmp(str, opt->name, len) == 0)
+				tails[pos++] = xstrdup(opt->name + len);
+
+			else if (strncmp(str+2, opt->name, len-2) == 0) {
+				if (opt->flags & OPT_BOOL)
+					tails[pos++] = xstrdup(opt->name + len-2);
+			}
+		}
+	} else if (!sep || len <= 1) {
+		/* expand variable */
+		tails = xnew(char *, nr_options);
+		list_for_each_entry(opt, &option_head, node) {
+			if (strncmp(str, opt->name, len) == 0)
+				tails[pos++] = xstrdup(opt->name + len);
+		}
+	} else if (len > 1 && sep) {
 		/* expand value */
 		char *var = xstrndup(str, sep - str);
+		tails = xnew(char *, 1);
 
 		list_for_each_entry(opt, &option_head, node) {
 			if (strcmp(var, opt->name) == 0) {
 				if (str[len - 1] == '=') {
 					char buf[OPTION_MAX_SIZE];
 
-					tails = xnew(char *, 1);
-
+					pos = 1;
 					buf[0] = 0;
 					opt->get(opt->data, buf, OPTION_MAX_SIZE);
 					tails[0] = xstrdup(buf);
-
-					tabexp.head = xstrdup(str);
-					tabexp.tails = tails;
-					tabexp.count = 1;
 				} else if (opt->flags & OPT_PROGRAM_PATH) {
 					expand_program_paths_option(sep + 1, var);
 				}
@@ -2413,31 +2462,14 @@ static void expand_options(const char *str)
 			}
 		}
 		free(var);
+	}
+
+	if (pos > 0) {
+		tabexp.head = xstrdup(str);
+		tabexp.tails = tails;
+		tabexp.count = pos;
 	} else {
-		/* expand variable */
-		int pos;
-
-		tails = xnew(char *, nr_options);
-		pos = 0;
-		list_for_each_entry(opt, &option_head, node) {
-			if (strncmp(str, opt->name, len) == 0)
-				tails[pos++] = xstrdup(opt->name + len);
-		}
-		if (pos > 0) {
-			if (pos == 1) {
-				/* only one variable matches, add '=' */
-				char *tmp = xstrjoin(tails[0], "=");
-
-				free(tails[0]);
-				tails[0] = tmp;
-			}
-
-			tabexp.head = xstrdup(str);
-			tabexp.tails = tails;
-			tabexp.count = pos;
-		} else {
-			free(tails);
-		}
+		free(tails);
 	}
 }
 
@@ -2566,6 +2598,7 @@ struct command commands[] = {
 	{ "unbind",                cmd_unbind,           1, 1,  expand_unbind_args,   0, 0          },
 	{ "unmark",                cmd_unmark,           0, 0,  NULL,                 0, 0          },
 	{ "update-cache",          cmd_update_cache,     0, 1,  NULL,                 0, 0          },
+	{ "version",               cmd_version,          0, 0,  NULL,                 0, 0          },
 	{ "view",                  cmd_view,             1, 1,  NULL,                 0, 0          },
 	{ "vol",                   cmd_vol,              1, 2,  NULL,                 0, 0          },
 	{ "w",                     cmd_save,             0, 1,  expand_load_save,     0, CMD_UNSAFE },
