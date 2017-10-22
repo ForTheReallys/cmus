@@ -398,9 +398,11 @@ clear [-l] [-p] [-q]
 	@li -q
 	clear play queue
 
-colorscheme <name>
+colorscheme [name]
 	Change color scheme.  Color schemes are found in `/usr/share/cmus/` or
 	`$XDG_CONFIG_HOME/cmus/` and have .theme filename extension.
+
+	If no argument is given, print the current colorscheme.
 
 echo <arg>...
 	Display arguments on the command line.

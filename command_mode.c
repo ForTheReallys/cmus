@@ -59,6 +59,7 @@ static struct history cmd_history;
 static char *cmd_history_filename;
 static char *history_search_text = NULL;
 static int arg_expand_cmd = -1;
+static char *colorscheme;
 
 /* view {{{ */
 
@@ -801,13 +802,27 @@ static void cmd_source(char *arg)
 
 static void cmd_colorscheme(char *arg)
 {
-	char filename[512];
+	if (arg) {
+		char filename[512];
 
-	snprintf(filename, sizeof(filename), "%s/%s.theme", cmus_config_dir, arg);
-	if (source_file(filename) == -1) {
-		snprintf(filename, sizeof(filename), "%s/%s.theme", cmus_data_dir, arg);
-		if (source_file(filename) == -1)
-			error_msg("sourcing %s: %s", filename, strerror(errno));
+		snprintf(filename, sizeof(filename), "%s/%s.theme", cmus_config_dir, arg);
+		if (source_file(filename) == -1) {
+			snprintf(filename, sizeof(filename), "%s/%s.theme", cmus_data_dir, arg);
+			if (source_file(filename) == -1) {
+				error_msg("sourcing %s: %s", filename, strerror(errno));
+				return;
+			}
+		}
+		if (colorscheme != NULL) {
+			free(colorscheme);
+			colorscheme = NULL;
+		}
+		colorscheme = xstrdup(arg);
+	} else {
+		if (colorscheme != NULL)
+			info_msg("%s", colorscheme);
+		else
+			info_msg("No colorscheme selected");
 	}
 }
 
@@ -2575,7 +2590,7 @@ struct command commands[] = {
 	{ "browser-up",            cmd_browser_up,       0, 0,  NULL,                 0, 0          },
 	{ "cd",                    cmd_cd,               0, 1,  expand_directories,   0, 0          },
 	{ "clear",                 cmd_clear,            0, 1,  NULL,                 0, 0          },
-	{ "colorscheme",           cmd_colorscheme,      1, 1,  expand_colorscheme,   0, 0          },
+	{ "colorscheme",           cmd_colorscheme,      0, 1,  expand_colorscheme,   0, 0          },
 	{ "echo",                  cmd_echo,             1, -1, NULL,                 0, 0          },
 	{ "factivate",             cmd_factivate,        0, 1,  expand_factivate,     0, 0          },
 	{ "filter",                cmd_filter,           0, 1,  NULL,                 0, 0          },
