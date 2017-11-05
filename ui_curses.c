@@ -51,6 +51,7 @@
 #include "mixer.h"
 #include "mpris.h"
 #include "locking.h"
+#include "bookmark.h"
 #ifdef HAVE_CONFIG
 #include "config/curses.h"
 #include "config/iconv.h"
@@ -2371,6 +2372,7 @@ static void init_all(void)
 
 	/* almost everything must be initialized now */
 	options_load();
+	bookmark_load();
 	if (mpris)
 		mpris_init();
 
@@ -2417,6 +2419,7 @@ static void exit_all(void)
 	if (resume_cmus)
 		resume_exit();
 	options_exit();
+	bookmark_exit();
 
 	server_exit();
 	cmus_exit();

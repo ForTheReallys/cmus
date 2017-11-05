@@ -48,6 +48,7 @@
 #include "op.h"
 #include "mpris.h"
 #include "job.h"
+#include "bookmark.h"
 
 #include <stdlib.h>
 #include <ctype.h>
@@ -349,6 +350,35 @@ struct window *current_win(void)
 	default:
 		return filters_win;
 	}
+}
+
+static void cmd_bookmark_add(char *arg)
+{
+	const char *filename = player_info.ti->filename;
+	int pos = player_info.pos;
+
+	if (filename == NULL)
+		error_msg("No file selected");
+	else if (*arg > '0' && *arg < '9') {
+		error_msg("Numbers are reserved for anonymous bookmarks");
+		return;
+	} else
+		bookmark_add(filename, arg, pos);
+}
+
+static void cmd_bookmark_remove(char *arg)
+{
+	const char *filename = player_info.ti->filename;
+	if (filename == NULL)
+		error_msg("No file selected");
+	else
+		bookmark_remove(filename, arg);
+}
+
+static void cmd_bookmark_goto(char *arg)
+{
+	const char *filename = player_info.ti->filename;
+	bookmark_play(filename, arg);
 }
 
 static void cmd_add(char *arg)
@@ -2522,6 +2552,12 @@ static void expand_commands(const char *str);
 struct command commands[] = {
 	{ "add",                   cmd_add,              1, 1,  expand_add,           0, 0          },
 	{ "bind",                  cmd_bind,             1, 1,  expand_bind_args,     0, CMD_UNSAFE },
+	{ "bookmark-add",          cmd_bookmark_add,     1, 1,  NULL,                 0, 0          },
+	//TODO expand_bookmark
+	{ "bookmark-remove",       cmd_bookmark_remove,  1, 1,  NULL,                 0, 0          },
+	{ "bookmark-goto",         cmd_bookmark_goto,    1, 1,  NULL,                 0, 0          },
+	//{ "bookmark-next",         cmd_bookmark_next,    0, 0,  NULL,                 0, 0          },
+	//{ "bookmark-prev",         cmd_bookmark_prev,    0, 0,  NULL,                 0, 0          },
 	{ "browser-up",            cmd_browser_up,       0, 0,  NULL,                 0, 0          },
 	{ "cd",                    cmd_cd,               0, 1,  expand_directories,   0, 0          },
 	{ "clear",                 cmd_clear,            0, 1,  NULL,                 0, 0          },

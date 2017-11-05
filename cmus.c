@@ -97,7 +97,7 @@ void cmus_prev(void)
 		player_set_file(info);
 }
 
-void cmus_play_file(const char *filename)
+int cmus_play_file(const char *filename)
 {
 	struct track_info *ti;
 
@@ -106,10 +106,11 @@ void cmus_play_file(const char *filename)
 	cache_unlock();
 	if (!ti) {
 		error_msg("Couldn't get file information for %s\n", filename);
-		return;
+		return 0;
 	}
 
 	player_play_file(ti);
+	return 1;
 }
 
 enum file_type cmus_detect_ft(const char *name, char **ret)

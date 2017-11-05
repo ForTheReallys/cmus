@@ -49,7 +49,7 @@ typedef int (*save_ti_cb)(for_each_ti_cb for_each_ti, const char *filename,
 
 int cmus_init(void);
 void cmus_exit(void);
-void cmus_play_file(const char *filename);
+int cmus_play_file(const char *filename);
 
 /* detect file type, returns absolute path or url in @ret */
 enum file_type cmus_detect_ft(const char *name, char **ret);
